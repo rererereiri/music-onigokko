@@ -91,7 +91,7 @@ canvas{position:fixed;inset:0;width:100%;height:100%;touch-action:none}
    <div id="rhythmInfo">10秒間、ボタンが光ったらTAP！</div>
    <div id="beatLane" style="display:flex;align-items:center;justify-content:center;"><div id="easyBeat" style="width:96px;height:96px;border-radius:50%;background:#4b5563;box-shadow:0 0 0 transparent;transition:.12s;"></div></div>
    <button id="tap">TAP！</button>
-   <div class="small">光っている間に押せば成功！ 5回成功するとアイテムGET！</div>
+   <div class="small">光っている間に押せば成功！ 3回成功すると、その場で音ゲー終了＆アイテムGET！</div>
  </div>
 </div>
 
@@ -290,30 +290,22 @@ function rhythmTick(){
  }
 
  document.getElementById('rhythmInfo').textContent=
-   `あと ${Math.max(0,Math.ceil(10-sec))}秒　成功 ${rhythmHits}/5`;
+   `あと ${Math.max(0,Math.ceil(10-sec))}秒　成功 ${rhythmHits}/3`;
 
  // 5回成功したら10秒待たずにクリア
- if(rhythmHits>=5){
+ if(rhythmHits>=3){
    giveItem();
    musicScore+=100;
    document.getElementById('musicScore').textContent=musicScore;
    sfx(980,.18);
-   flash('🎁 アイテムGET！');
+   flash('🎁 成功！アイテムGET！');
    closeRhythm();
    return;
  }
 
- // 10秒終了時、3回以上でもおまけクリアにして子ども向けにやさしく
+ // 10秒たったら必ず通常画面へ戻る
  if(sec>=10){
-   if(rhythmHits>=3){
-     giveItem();
-     musicScore+=100;
-     document.getElementById('musicScore').textContent=musicScore;
-     sfx(980,.18);
-     flash('🎁 アイテムGET！');
-   }else{
-     flash('もう一回！');
-   }
+   flash('音ゲー終了！');
    closeRhythm();
    return;
  }
