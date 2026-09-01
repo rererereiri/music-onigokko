@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>音楽おにごっこ FPS レーダー版</title>
+<title>音楽おにごっこ FPS 星とりやすい版</title>
 <style>
 html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#8fd8ff;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;touch-action:none}
 canvas{position:fixed;inset:0;width:100%;height:100%;touch-action:none}
@@ -43,7 +43,7 @@ canvas{position:fixed;inset:0;width:100%;height:100%;touch-action:none}
     <p>
       一人称視点＋鬼レーダー付き。<br>
       鬼の方向を <b>← → ↑ ↓</b> で表示します。<br>
-      近づくと警告音が速くなり、5m以内では画面の端が赤く光ります。
+      近づくと警告音が速くなり、5m以内では画面の端が赤く光ります。<br>⭐ 星は約3m以内に近づけば取れます。近い星は光って見えます。
     </p>
     <button id="play">ゲームスタート</button>
   </div>
@@ -173,9 +173,27 @@ function drawBox(b){
 }
 function drawStar(s){
   const p=project(s.x,s.y,s.z); if(!p)return;
+
+  const dist=Math.hypot(player.x-s.x,player.z-s.z);
+  const near=dist<8;
+  const size=Math.max(22,30*p.s);
+
+  ctx.save();
   ctx.textAlign='center';
-  ctx.font=`${Math.max(12,20*p.s)}px sans-serif`;
+
+  // 近くの星は光って見える
+  if(near){
+    const pulse=0.55+0.35*Math.sin(performance.now()/160);
+    ctx.shadowColor=`rgba(255,235,70,${pulse})`;
+    ctx.shadowBlur=26;
+  }else{
+    ctx.shadowColor='rgba(255,235,70,.45)';
+    ctx.shadowBlur=12;
+  }
+
+  ctx.font=`${size}px sans-serif`;
   ctx.fillText('⭐',p.x,p.y);
+  ctx.restore();
 }
 function drawOni(){
   const p=project(oni.x,1.5,oni.z); if(!p)return;
@@ -336,7 +354,7 @@ function loop(t){
   }
 
   for(const s of stars){
-    if(!s.got&&Math.hypot(player.x-s.x,player.z-s.z)<1.4){
+    if(!s.got&&Math.hypot(player.x-s.x,player.z-s.z)<3){
       s.got=true;score+=100;document.getElementById('score').textContent=score;
       sfx(880,.12);setTimeout(()=>sfx(1175,.12),80);
     }
