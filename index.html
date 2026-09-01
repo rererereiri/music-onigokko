@@ -3,14 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>音楽おにごっこ FP版</title>
+<title>音楽おにごっこ FPS版</title>
 <style>
 html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#8fd8ff;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;touch-action:none}
 canvas{position:fixed;inset:0;width:100%;height:100%;touch-action:none}
 #hud{position:fixed;top:12px;left:50%;transform:translateX(-50%);display:flex;gap:8px;z-index:5;pointer-events:none}
 .badge{background:#20242bcc;color:#fff;border-radius:13px;padding:8px 12px;font-weight:900}
 #oniInfo{position:fixed;top:62px;left:50%;transform:translateX(-50%);z-index:5;background:#c33131;color:#fff;padding:7px 12px;border-radius:13px;font-weight:900}
-#cross{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:4;color:#fff;font-size:30px;text-shadow:0 2px 4px #000;pointer-events:none}
+#cross{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:4;color:white;font-size:34px;text-shadow:0 2px 5px #000;pointer-events:none}
 #start{position:fixed;inset:0;background:#142036e8;z-index:20;display:flex;align-items:center;justify-content:center;padding:18px}
 .card{background:white;border-radius:24px;padding:24px;text-align:center;max-width:520px;width:100%;box-shadow:0 15px 50px #0005}
 .card h1{margin:0 0 8px}.card p{line-height:1.65}
@@ -24,6 +24,7 @@ canvas{position:fixed;inset:0;width:100%;height:100%;touch-action:none}
 </head>
 <body>
 <canvas id="game"></canvas>
+
 <div id="hud">
   <div class="badge">⏰ <span id="time">300</span></div>
   <div class="badge">❤️ <span id="life">3</span></div>
@@ -34,14 +35,16 @@ canvas{position:fixed;inset:0;width:100%;height:100%;touch-action:none}
 <div id="msg"></div>
 
 <div id="start">
- <div class="card">
-  <h1>🎮 音楽おにごっこ FP</h1>
-  <p><b>一人称視点</b>で、ブロックの街を逃げよう！<br>
-  左スティックで移動、右側を指でなぞると視点移動。<br>
-  木箱や低い台はジャンプで登れます。<br>
-  鬼は10秒後に追跡スタート。</p>
-  <button id="play">ゲームスタート</button>
- </div>
+  <div class="card">
+    <h1>🎮 音楽おにごっこ FPS</h1>
+    <p>
+      今回は<b>完全な一人称視点</b>です。<br>
+      自分のキャラクターは画面に出ません。<br>
+      左スティックで移動、右側をスワイプで視点移動。<br>
+      木箱や低い台はジャンプで登れます。
+    </p>
+    <button id="play">ゲームスタート</button>
+  </div>
 </div>
 
 <div id="joy"><div id="stick"></div></div>
@@ -49,210 +52,436 @@ canvas{position:fixed;inset:0;width:100%;height:100%;touch-action:none}
 <div id="lookHint">右側をスワイプで視点移動</div>
 
 <script>
-const c=document.getElementById('game'),ctx=c.getContext('2d');
-let W,H,dpr=1;
-function resize(){dpr=Math.min(devicePixelRatio||1,2);W=innerWidth;H=innerHeight;c.width=W*dpr;c.height=H*dpr;ctx.setTransform(dpr,0,0,dpr,0,0)}
+const canvas=document.getElementById('game');
+const ctx=canvas.getContext('2d');
+
+let W=0,H=0,dpr=1;
+function resize(){
+  dpr=Math.min(devicePixelRatio||1,2);
+  W=innerWidth; H=innerHeight;
+  canvas.width=W*dpr; canvas.height=H*dpr;
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+}
 addEventListener('resize',resize);resize();
 
 const FOV=Math.PI/2.7;
-const worldSize=100;
+const WORLD=110;
+
 let running=false,last=0,elapsed=0,life=3,score=0,inv=0;
-const player={x:0,z:42,y:1.7,vy:0,yaw:Math.PI,eye:1.7};
-const oni={x:0,z:-35,y:0};
-const keys={},joy={x:0,y:0};
-const stars=[];
+const player={x:0,z:40,y:1.7,vy:0,yaw:Math.PI,eye:1.7};
+const oni={x:0,z:-34};
 
 const blocks=[
- {x:0,z:-5,w:22,d:18,h:10,c:'#e8d6a6'},
- {x:-32,z:-8,w:16,d:20,h:13,c:'#7eb6d9'},
- {x:31,z:-12,w:17,d:20,h:16,c:'#e69a68'},
- {x:-28,z:28,w:20,d:15,h:9,c:'#947dc6'},
- {x:28,z:26,w:19,d:16,h:12,c:'#74b88d'},
- {x:0,z:20,w:7,d:7,h:2.1,c:'#b27b4f'},
- {x:-10,z:35,w:6,d:6,h:1.5,c:'#b27b4f'},
- {x:11,z:33,w:8,d:5,h:2.7,c:'#6f96c5'},
- {x:-17,z:12,w:8,d:5,h:2.3,c:'#cf7c7c'},
- {x:18,z:8,w:7,d:7,h:3.0,c:'#8c74c5'},
- {x:-5,z:-25,w:7,d:6,h:1.8,c:'#b27b4f'},
- {x:12,z:-30,w:9,d:5,h:2.5,c:'#d49a56'}
+ {x:0,z:-4,w:24,d:18,h:10,c:'#e7d5a5'},
+ {x:-34,z:-8,w:18,d:22,h:13,c:'#79afd4'},
+ {x:34,z:-10,w:18,d:22,h:16,c:'#e59667'},
+ {x:-30,z:28,w:22,d:16,h:9,c:'#927bc4'},
+ {x:30,z:26,w:20,d:18,h:12,c:'#72b589'},
+ {x:0,z:22,w:7,d:7,h:2.0,c:'#ad764b'},
+ {x:-11,z:35,w:6,d:6,h:1.5,c:'#ad764b'},
+ {x:12,z:33,w:8,d:5,h:2.6,c:'#6d93c0'},
+ {x:-18,z:12,w:8,d:5,h:2.2,c:'#cb7a7a'},
+ {x:18,z:8,w:7,d:7,h:2.9,c:'#8870c0'},
+ {x:-6,z:-26,w:7,d:6,h:1.8,c:'#ad764b'},
+ {x:13,z:-31,w:9,d:5,h:2.4,c:'#d09655'}
 ];
 
+const stars=[];
 function makeStars(){
- stars.length=0;
- for(let i=0;i<28;i++){
-   let s={x:(Math.random()-.5)*82,z:(Math.random()-.5)*82,y:.8,got:false};
-   stars.push(s);
- }
+  stars.length=0;
+  for(let i=0;i<30;i++){
+    stars.push({
+      x:(Math.random()-.5)*92,
+      z:(Math.random()-.5)*92,
+      y:.8,
+      got:false
+    });
+  }
 }
 makeStars();
 
+const keys={},joy={x:0,y:0};
+
 let ac=null,master=null,musicTimer=null,step=0;
 function audioStart(){
- ac=new (window.AudioContext||window.webkitAudioContext)();
- master=ac.createGain();master.gain.value=.13;master.connect(ac.destination);
- const notes=[261.63,329.63,392,523.25,392,329.63,293.66,349.23,440,587.33,440,349.23];
- function tick(){if(!running)return;const o=ac.createOscillator(),g=ac.createGain();o.type='triangle';o.frequency.value=notes[step++%notes.length];g.gain.setValueAtTime(.11,ac.currentTime);g.gain.exponentialRampToValueAtTime(.001,ac.currentTime+.23);o.connect(g);g.connect(master);o.start();o.stop(ac.currentTime+.24)}
- tick();musicTimer=setInterval(tick,260)
+  ac=new (window.AudioContext||window.webkitAudioContext)();
+  master=ac.createGain();
+  master.gain.value=.13;
+  master.connect(ac.destination);
+
+  const notes=[261.63,329.63,392,523.25,392,329.63,293.66,349.23,440,587.33,440,349.23];
+  function tick(){
+    if(!running)return;
+    const o=ac.createOscillator(),g=ac.createGain();
+    o.type='triangle';
+    o.frequency.value=notes[step++%notes.length];
+    g.gain.setValueAtTime(.11,ac.currentTime);
+    g.gain.exponentialRampToValueAtTime(.001,ac.currentTime+.23);
+    o.connect(g); g.connect(master);
+    o.start(); o.stop(ac.currentTime+.24);
+  }
+  tick();
+  musicTimer=setInterval(tick,260);
 }
-function sfx(freq=700,d=.12,type='sine'){if(!ac)return;const o=ac.createOscillator(),g=ac.createGain();o.type=type;o.frequency.value=freq;g.gain.setValueAtTime(.22,ac.currentTime);g.gain.exponentialRampToValueAtTime(.001,ac.currentTime+d);o.connect(g);g.connect(master);o.start();o.stop(ac.currentTime+d)}
-function flash(t){document.getElementById('msg').textContent=t;setTimeout(()=>document.getElementById('msg').textContent='',900)}
+function sfx(freq=700,d=.12,type='sine'){
+  if(!ac)return;
+  const o=ac.createOscillator(),g=ac.createGain();
+  o.type=type; o.frequency.value=freq;
+  g.gain.setValueAtTime(.22,ac.currentTime);
+  g.gain.exponentialRampToValueAtTime(.001,ac.currentTime+d);
+  o.connect(g);g.connect(master);
+  o.start();o.stop(ac.currentTime+d);
+}
+function flash(t){
+  const m=document.getElementById('msg');
+  m.textContent=t;
+  setTimeout(()=>{if(m.textContent===t)m.textContent=''},900);
+}
 
 function topAt(px,pz){
- let top=0;
- for(const b of blocks){
-   if(px>b.x-b.w/2 && px<b.x+b.w/2 && pz>b.z-b.d/2 && pz<b.z+b.d/2) top=Math.max(top,b.h);
- }
- return top;
+  let top=0;
+  for(const b of blocks){
+    if(px>b.x-b.w/2 && px<b.x+b.w/2 && pz>b.z-b.d/2 && pz<b.z+b.d/2){
+      top=Math.max(top,b.h);
+    }
+  }
+  return top;
 }
-function blocksMove(nx,nz,feetY){
- for(const b of blocks){
-   if(nx>b.x-b.w/2-.35 && nx<b.x+b.w/2+.35 && nz>b.z-b.d/2-.35 && nz<b.z+b.d/2+.35){
-     if(feetY < b.h-.25) return true;
-   }
- }
- return false;
+function blocked(nx,nz,feet){
+  for(const b of blocks){
+    if(nx>b.x-b.w/2-.35 && nx<b.x+b.w/2+.35 &&
+       nz>b.z-b.d/2-.35 && nz<b.z+b.d/2+.35){
+      if(feet < b.h-.2)return true;
+    }
+  }
+  return false;
 }
 
-function camPoint(wx,wy,wz){
- const dx=wx-player.x, dz=wz-player.z;
- const cy=Math.cos(-player.yaw), sy=Math.sin(-player.yaw);
- const rx=dx*cy-dz*sy, rz=dx*sy+dz*cy;
- if(rz<.2)return null;
- const f=(W/2)/Math.tan(FOV/2);
- return {x:W/2+rx/rz*f,y:H/2-(wy-player.y)/rz*f,s:f/rz,d:rz};
+// true first-person camera projection
+function project(wx,wy,wz){
+  const dx=wx-player.x;
+  const dz=wz-player.z;
+
+  const sin=Math.sin(player.yaw);
+  const cos=Math.cos(player.yaw);
+
+  const right = dx*cos - dz*sin;
+  const forward = dx*sin + dz*cos;
+
+  if(forward<=0.15)return null;
+
+  const focal=(W/2)/Math.tan(FOV/2);
+  return {
+    x:W/2 + (right/forward)*focal,
+    y:H/2 - ((wy-player.y)/forward)*focal,
+    s:focal/forward,
+    d:forward
+  };
 }
-function face(points,fill){
- if(points.some(p=>!p))return;
- ctx.beginPath();ctx.moveTo(points[0].x,points[0].y);
- for(let i=1;i<points.length;i++)ctx.lineTo(points[i].x,points[i].y);
- ctx.closePath();ctx.fillStyle=fill;ctx.fill();ctx.strokeStyle='#0002';ctx.stroke()
+
+function poly(pts,fill){
+  if(pts.some(p=>!p))return;
+  ctx.beginPath();
+  ctx.moveTo(pts[0].x,pts[0].y);
+  for(let i=1;i<pts.length;i++)ctx.lineTo(pts[i].x,pts[i].y);
+  ctx.closePath();
+  ctx.fillStyle=fill;
+  ctx.fill();
+  ctx.strokeStyle='#0002';
+  ctx.stroke();
 }
+
 function drawBox(b){
- const x1=b.x-b.w/2,x2=b.x+b.w/2,z1=b.z-b.d/2,z2=b.z+b.d/2,y0=0,y1=b.h;
- const p={
-  a:camPoint(x1,y0,z1),b:camPoint(x2,y0,z1),c:camPoint(x2,y0,z2),d:camPoint(x1,y0,z2),
-  A:camPoint(x1,y1,z1),B:camPoint(x2,y1,z1),C:camPoint(x2,y1,z2),D:camPoint(x1,y1,z2)
- };
- face([p.A,p.B,p.C,p.D],b.c);
- face([p.b,p.c,p.C,p.B],'rgba(0,0,0,.16)');
- face([p.a,p.d,p.D,p.A],'rgba(0,0,0,.24)');
+  const x1=b.x-b.w/2,x2=b.x+b.w/2;
+  const z1=b.z-b.d/2,z2=b.z+b.d/2;
+  const y0=0,y1=b.h;
+
+  const p={
+    a:project(x1,y0,z1),b:project(x2,y0,z1),c:project(x2,y0,z2),d:project(x1,y0,z2),
+    A:project(x1,y1,z1),B:project(x2,y1,z1),C:project(x2,y1,z2),D:project(x1,y1,z2)
+  };
+
+  poly([p.A,p.B,p.C,p.D],b.c);
+  poly([p.b,p.c,p.C,p.B],'rgba(0,0,0,.15)');
+  poly([p.a,p.d,p.D,p.A],'rgba(0,0,0,.24)');
 }
+
 function drawStar(s){
- const p=camPoint(s.x,s.y,s.z);if(!p)return;
- ctx.font=`${Math.max(12,22*p.s)}px sans-serif`;ctx.textAlign='center';ctx.fillText('⭐',p.x,p.y)
+  const p=project(s.x,s.y,s.z);
+  if(!p)return;
+  ctx.textAlign='center';
+  ctx.font=`${Math.max(12,20*p.s)}px sans-serif`;
+  ctx.fillText('⭐',p.x,p.y);
 }
+
 function drawOni(){
- const p=camPoint(oni.x,1.5,oni.z);if(!p)return;
- const s=Math.max(.45,p.s);
- ctx.fillStyle='#e64646';ctx.fillRect(p.x-18*s,p.y-30*s,36*s,54*s);
- ctx.font=`${Math.max(18,26*s)}px sans-serif`;ctx.textAlign='center';ctx.fillText('👹',p.x,p.y-36*s);
- ctx.fillStyle='#fff';ctx.strokeStyle='#111';ctx.lineWidth=3;ctx.font=`bold ${Math.max(12,14*s)}px sans-serif`;ctx.strokeText('ONI',p.x,p.y-58*s);ctx.fillText('ONI',p.x,p.y-58*s)
+  const p=project(oni.x,1.5,oni.z);
+  if(!p)return;
+  const s=Math.max(.4,p.s);
+
+  ctx.fillStyle='#e64545';
+  ctx.fillRect(p.x-18*s,p.y-28*s,36*s,52*s);
+
+  ctx.textAlign='center';
+  ctx.font=`${Math.max(20,28*s)}px sans-serif`;
+  ctx.fillText('👹',p.x,p.y-35*s);
+
+  ctx.font=`bold ${Math.max(12,14*s)}px sans-serif`;
+  ctx.fillStyle='#fff';
+  ctx.strokeStyle='#111';
+  ctx.lineWidth=3;
+  ctx.strokeText('ONI',p.x,p.y-58*s);
+  ctx.fillText('ONI',p.x,p.y-58*s);
 }
 
 function render(){
- let g=ctx.createLinearGradient(0,0,0,H);
- g.addColorStop(0,'#77caff');g.addColorStop(.55,'#dff4ff');g.addColorStop(.551,'#82d277');g.addColorStop(1,'#4da550');
- ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+  const sky=ctx.createLinearGradient(0,0,0,H);
+  sky.addColorStop(0,'#78caff');
+  sky.addColorStop(.55,'#dff4ff');
+  sky.addColorStop(.551,'#80cf75');
+  sky.addColorStop(1,'#4da550');
+  ctx.fillStyle=sky;
+  ctx.fillRect(0,0,W,H);
 
- // ground grid
- ctx.strokeStyle='#ffffff33';ctx.lineWidth=1;
- for(let z=-50;z<=50;z+=5){
-   let a=camPoint(-50,0,z),b=camPoint(50,0,z);if(a&&b){ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke()}
- }
- for(let xx=-50;xx<=50;xx+=5){
-   let a=camPoint(xx,0,-50),b=camPoint(xx,0,50);if(a&&b){ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke()}
- }
+  // ground grid
+  ctx.strokeStyle='#ffffff36';
+  ctx.lineWidth=1;
 
- let objs=[];
- blocks.forEach(b=>{const p=camPoint(b.x,0,b.z);if(p)objs.push({d:p.d,f:()=>drawBox(b)})});
- stars.filter(s=>!s.got).forEach(s=>{const p=camPoint(s.x,s.y,s.z);if(p)objs.push({d:p.d,f:()=>drawStar(s)})});
- let op=camPoint(oni.x,0,oni.z);if(op)objs.push({d:op.d,f:drawOni});
- objs.sort((a,b)=>b.d-a.d).forEach(o=>o.f());
+  for(let z=-50;z<=50;z+=5){
+    const a=project(-50,0,z);
+    const b=project(50,0,z);
+    if(a&&b){
+      ctx.beginPath();
+      ctx.moveTo(a.x,a.y);
+      ctx.lineTo(b.x,b.y);
+      ctx.stroke();
+    }
+  }
+
+  for(let xx=-50;xx<=50;xx+=5){
+    const a=project(xx,0,-50);
+    const b=project(xx,0,50);
+    if(a&&b){
+      ctx.beginPath();
+      ctx.moveTo(a.x,a.y);
+      ctx.lineTo(b.x,b.y);
+      ctx.stroke();
+    }
+  }
+
+  const objs=[];
+
+  for(const b of blocks){
+    const p=project(b.x,0,b.z);
+    if(p)objs.push({d:p.d,f:()=>drawBox(b)});
+  }
+
+  for(const s of stars){
+    if(s.got)continue;
+    const p=project(s.x,s.y,s.z);
+    if(p)objs.push({d:p.d,f:()=>drawStar(s)});
+  }
+
+  const op=project(oni.x,0,oni.z);
+  if(op)objs.push({d:op.d,f:drawOni});
+
+  objs.sort((a,b)=>b.d-a.d);
+  for(const o of objs)o.f();
 }
-render();
+
+function jump(){
+  const floor=topAt(player.x,player.z)+player.eye;
+  if(Math.abs(player.y-floor)<.08){
+    player.vy=8.7;
+    sfx(520,.1,'square');
+  }
+}
 
 document.getElementById('play').onclick=()=>{
- document.getElementById('start').style.display='none';
- player.x=0;player.z=42;player.y=1.7;player.vy=0;player.yaw=Math.PI;
- oni.x=0;oni.z=-35;elapsed=0;life=3;score=0;inv=0;makeStars();
- document.getElementById('life').textContent=3;document.getElementById('score').textContent=0;document.getElementById('time').textContent=300;
- running=true;audioStart();last=performance.now();requestAnimationFrame(loop)
-};
-function jump(){const floor=topAt(player.x,player.z)+player.eye;if(Math.abs(player.y-floor)<.08){player.vy=8.7;sfx(520,.1,'square')}}
-document.getElementById('jump').addEventListener('pointerdown',e=>{e.preventDefault();jump()});
+  document.getElementById('start').style.display='none';
+  player.x=0; player.z=40; player.y=1.7; player.vy=0; player.yaw=Math.PI;
+  oni.x=0; oni.z=-34;
+  elapsed=0; life=3; score=0; inv=0;
+  makeStars();
 
-addEventListener('keydown',e=>{keys[e.key.toLowerCase()]=1;if(e.code==='Space')jump()});
+  document.getElementById('life').textContent=3;
+  document.getElementById('score').textContent=0;
+  document.getElementById('time').textContent=300;
+
+  running=true;
+  audioStart();
+  last=performance.now();
+  requestAnimationFrame(loop);
+};
+
+document.getElementById('jump').addEventListener('pointerdown',e=>{
+  e.preventDefault();
+  jump();
+});
+
+addEventListener('keydown',e=>{
+  keys[e.key.toLowerCase()]=1;
+  if(e.code==='Space')jump();
+});
 addEventListener('keyup',e=>keys[e.key.toLowerCase()]=0);
 
-const joyEl=document.getElementById('joy'),stick=document.getElementById('stick');
-function joyMove(e){
- const r=joyEl.getBoundingClientRect(),px=e.clientX-(r.left+r.width/2),py=e.clientY-(r.top+r.height/2),m=Math.hypot(px,py)||1,k=Math.min(1,55/m);
- joy.x=px/55*k;joy.y=py/55*k;stick.style.transform=`translate(${joy.x*38}px,${joy.y*38}px)`
-}
-joyEl.onpointerdown=e=>{joyEl.setPointerCapture(e.pointerId);joyMove(e)};
-joyEl.onpointermove=e=>{if(e.buttons)joyMove(e)};
-joyEl.onpointerup=joyEl.onpointercancel=()=>{joy.x=joy.y=0;stick.style.transform=''};
+const joyEl=document.getElementById('joy');
+const stick=document.getElementById('stick');
 
-let lookId=null,lastLookX=0;
-c.addEventListener('pointerdown',e=>{
- if(e.clientX>W*.42){lookId=e.pointerId;lastLookX=e.clientX;c.setPointerCapture(e.pointerId)}
+function joyMove(e){
+  const r=joyEl.getBoundingClientRect();
+  const px=e.clientX-(r.left+r.width/2);
+  const py=e.clientY-(r.top+r.height/2);
+  const m=Math.hypot(px,py)||1;
+  const k=Math.min(1,55/m);
+
+  joy.x=px/55*k;
+  joy.y=py/55*k;
+
+  stick.style.transform=`translate(${joy.x*38}px,${joy.y*38}px)`;
+}
+
+joyEl.onpointerdown=e=>{
+  joyEl.setPointerCapture(e.pointerId);
+  joyMove(e);
+};
+joyEl.onpointermove=e=>{
+  if(e.buttons)joyMove(e);
+};
+joyEl.onpointerup=joyEl.onpointercancel=()=>{
+  joy.x=0; joy.y=0;
+  stick.style.transform='';
+};
+
+// right side swipe = look
+let lookId=null,lastX=0;
+
+canvas.addEventListener('pointerdown',e=>{
+  if(e.clientX>W*.42){
+    lookId=e.pointerId;
+    lastX=e.clientX;
+    canvas.setPointerCapture(e.pointerId);
+  }
 });
-c.addEventListener('pointermove',e=>{
- if(e.pointerId===lookId){let dx=e.clientX-lastLookX;lastLookX=e.clientX;player.yaw-=dx*.006}
+
+canvas.addEventListener('pointermove',e=>{
+  if(e.pointerId===lookId){
+    const dx=e.clientX-lastX;
+    lastX=e.clientX;
+    player.yaw -= dx*.006;
+  }
 });
-c.addEventListener('pointerup',e=>{if(e.pointerId===lookId)lookId=null});
-c.addEventListener('pointercancel',e=>{if(e.pointerId===lookId)lookId=null});
+
+canvas.addEventListener('pointerup',e=>{
+  if(e.pointerId===lookId)lookId=null;
+});
+canvas.addEventListener('pointercancel',e=>{
+  if(e.pointerId===lookId)lookId=null;
+});
 
 function loop(t){
- if(!running)return;
- const dt=Math.min(.035,(t-last)/1000||0);last=t;elapsed+=dt;inv=Math.max(0,inv-dt);
+  if(!running)return;
 
- let f=(keys['w']||keys['arrowup']?1:0)-(keys['s']||keys['arrowdown']?1:0)-joy.y;
- let r=(keys['d']||keys['arrowright']?1:0)-(keys['a']||keys['arrowleft']?1:0)+joy.x;
- let l=Math.hypot(f,r);if(l>1){f/=l;r/=l}
+  const dt=Math.min(.035,(t-last)/1000||0);
+  last=t;
+  elapsed+=dt;
+  inv=Math.max(0,inv-dt);
 
- const sp=7.2, fx=Math.sin(player.yaw),fz=Math.cos(player.yaw), rx=Math.cos(player.yaw),rz=-Math.sin(player.yaw);
- let dx=(fx*f+rx*r)*sp*dt, dz=(fz*f+rz*r)*sp*dt;
- const feet=player.y-player.eye;
- if(!blocksMove(player.x+dx,player.z,feet))player.x+=dx;
- if(!blocksMove(player.x,player.z+dz,feet))player.z+=dz;
- player.x=Math.max(-48,Math.min(48,player.x));player.z=Math.max(-48,Math.min(48,player.z));
+  let f=(keys['w']||keys['arrowup']?1:0)-(keys['s']||keys['arrowdown']?1:0)-joy.y;
+  let r=(keys['d']||keys['arrowright']?1:0)-(keys['a']||keys['arrowleft']?1:0)+joy.x;
 
- const floor=topAt(player.x,player.z)+player.eye;
- player.vy-=19*dt;player.y+=player.vy*dt;if(player.y<floor){player.y=floor;player.vy=0}
+  const len=Math.hypot(f,r);
+  if(len>1){f/=len;r/=len;}
 
- if(elapsed>=10){
-   const dxo=player.x-oni.x,dzo=player.z-oni.z,d=Math.hypot(dxo,dzo)||1;
-   const os=Math.min(6.1,4.2+elapsed/180);
-   oni.x+=dxo/d*os*dt;oni.z+=dzo/d*os*dt;
-   document.getElementById('oniInfo').textContent=`👹 鬼まで ${Math.round(d)}m`;
-   if(d<1.6&&inv<=0){
-     life--;document.getElementById('life').textContent=life;sfx(120,.45,'sawtooth');flash('👹 つかまった！');
-     inv=3;oni.x=player.x+18;oni.z=player.z+18;
-     if(life<=0)return end(false)
-   }
- }else{
-   document.getElementById('oniInfo').textContent=`👹 鬼スタートまで ${Math.ceil(10-elapsed)}秒`
- }
+  const sp=7.2;
 
- stars.forEach(s=>{
-   if(!s.got&&Math.hypot(player.x-s.x,player.z-s.z)<1.4){
-     s.got=true;score+=100;document.getElementById('score').textContent=score;sfx(880,.12);setTimeout(()=>sfx(1175,.12),80)
-   }
- });
+  const forwardX=Math.sin(player.yaw);
+  const forwardZ=Math.cos(player.yaw);
+  const rightX=Math.cos(player.yaw);
+  const rightZ=-Math.sin(player.yaw);
 
- document.getElementById('time').textContent=Math.max(0,Math.ceil(300-elapsed));
- if(elapsed>=300)return end(true);
+  const dx=(forwardX*f+rightX*r)*sp*dt;
+  const dz=(forwardZ*f+rightZ*r)*sp*dt;
 
- render();requestAnimationFrame(loop)
+  const feet=player.y-player.eye;
+
+  if(!blocked(player.x+dx,player.z,feet))player.x+=dx;
+  if(!blocked(player.x,player.z+dz,feet))player.z+=dz;
+
+  player.x=Math.max(-52,Math.min(52,player.x));
+  player.z=Math.max(-52,Math.min(52,player.z));
+
+  const floor=topAt(player.x,player.z)+player.eye;
+  player.vy-=19*dt;
+  player.y+=player.vy*dt;
+
+  if(player.y<floor){
+    player.y=floor;
+    player.vy=0;
+  }
+
+  if(elapsed>=10){
+    const dxo=player.x-oni.x;
+    const dzo=player.z-oni.z;
+    const d=Math.hypot(dxo,dzo)||1;
+
+    const os=Math.min(6.1,4.2+elapsed/180);
+
+    oni.x+=dxo/d*os*dt;
+    oni.z+=dzo/d*os*dt;
+
+    document.getElementById('oniInfo').textContent=`👹 鬼まで ${Math.round(d)}m`;
+
+    if(d<1.6&&inv<=0){
+      life--;
+      document.getElementById('life').textContent=life;
+      sfx(120,.45,'sawtooth');
+      flash('👹 つかまった！');
+
+      inv=3;
+      oni.x=player.x+18;
+      oni.z=player.z+18;
+
+      if(life<=0)return end(false);
+    }
+  }else{
+    document.getElementById('oniInfo').textContent=`👹 鬼スタートまで ${Math.ceil(10-elapsed)}秒`;
+  }
+
+  for(const s of stars){
+    if(!s.got&&Math.hypot(player.x-s.x,player.z-s.z)<1.4){
+      s.got=true;
+      score+=100;
+      document.getElementById('score').textContent=score;
+      sfx(880,.12);
+      setTimeout(()=>sfx(1175,.12),80);
+    }
+  }
+
+  document.getElementById('time').textContent=Math.max(0,Math.ceil(300-elapsed));
+
+  if(elapsed>=300)return end(true);
+
+  render();
+  requestAnimationFrame(loop);
 }
 
 function end(win){
- running=false;if(musicTimer)clearInterval(musicTimer);
- document.getElementById('start').style.display='flex';
- document.getElementById('start').innerHTML=`<div class="card"><h1>${win?'🎉 逃げ切った！':'👹 ゲームオーバー'}</h1><p>スコア：<b>${score}</b></p><button id="restart">もう一度</button></div>`;
- document.getElementById('restart').onclick=()=>location.reload()
+  running=false;
+  if(musicTimer)clearInterval(musicTimer);
+
+  document.getElementById('start').style.display='flex';
+  document.getElementById('start').innerHTML=
+    `<div class="card">
+      <h1>${win?'🎉 逃げ切った！':'👹 ゲームオーバー'}</h1>
+      <p>スコア：<b>${score}</b></p>
+      <button id="restart">もう一度</button>
+    </div>`;
+
+  document.getElementById('restart').onclick=()=>location.reload();
 }
+
+render();
 </script>
 </body>
 </html>
