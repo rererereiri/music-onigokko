@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>音楽おにごっこ 3D</title>
+<style>
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#8ed3ff;font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Yu Gothic",sans-serif}
+canvas{position:fixed;inset:0;width:100%;height:100%;touch-action:none}
+#hud{position:fixed;top:10px;left:50%;transform:translateX(-50%);display:flex;gap:6px;z-index:3;pointer-events:none}
+.badge{background:#111c;color:white;border-radius:12px;padding:8px 10px;font-weight:800}
+#startscreen{position:fixed;inset:0;background:#111a;display:flex;align-items:center;justify-content:center;z-index:20;padding:18px}
+.box{background:white;border-radius:24px;padding:22px;text-align:center;max-width:480px;width:100%;color:#24304b;box-shadow:0 18px 60px #0006}
+.box h1{font-size:30px;margin:0 0 8px}
+.box p{line-height:1.6}
+#play{appearance:none;-webkit-appearance:none;border:0;border-radius:18px;background:#62c8ff;padding:16px 32px;font-size:22px;font-weight:900;color:#163047;box-shadow:0 6px 0 #2789bf;touch-action:manipulation}
+#joy{position:fixed;left:18px;bottom:28px;width:130px;height:130px;border-radius:50%;background:#ffffff35;border:2px solid #ffffff66;z-index:5;touch-action:none;display:none}
+#stick{position:absolute;left:37px;top:37px;width:56px;height:56px;border-radius:50%;background:#ffffffcc}
+#jump{position:fixed;right:24px;bottom:38px;width:86px;height:86px;border:0;border-radius:50%;background:#ffd34f;font-weight:900;font-size:16px;z-index:5;display:none;touch-action:manipulation}
+#info{position:fixed;bottom:8px;left:50%;transform:translateX(-50%);font-size:11px;color:white;background:#0007;padding:4px 8px;border-radius:8px;z-index:2;pointer-events:none}
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<div id="hud">
+ <div class="badge">⏰ <span id="time">300</span></div><div class="badge">❤️ <span id="lives">3</span></div>
+ <div class="badge">⭐ <span id="score">0</span></div>
+</div>
+
+<div id="startscreen">
+ <div class="box">
+   <h1>🧱 音楽おにごっこ 3D</h1>
+   <p>青いキャラを動かして👹から逃げよう！<br>⭐を集めながら5分逃げ切ればクリア！<br>最初の10秒は鬼が動かないよ。3回つかまるとゲームオーバー！</p>
+   <button id="play" type="button">▶ PLAY</button>
+   <p style="font-size:12px;margin-bottom:0">ボタンを1回タップするとスタートします</p>
+ </div>
+</div>
+
+<div id="joy"><div id="stick"></div></div>
+<button id="jump" type="button">JUMP</button>
+<div id="info">PC: WASD / 矢印キー　スマホ・iPad: 左スティック＋JUMP</div>
+
+<script>
+(function(){
+"use strict";
+var c=document.getElementById("game"),ctx=c.getContext("2d");
+var dpr=Math.min(window.devicePixelRatio||1,2);
+function resize(){
+ c.width=Math.floor(innerWidth*dpr);c.height=Math.floor(innerHeight*dpr);
+ c.style.width=innerWidth+"px";c.style.height=innerHeight+"px";
+ ctx.setTransform(dpr,0,0,dpr,0,0);
+}
+resize();addEventListener("resize",resize);
+
+var running=false,last=0,time=300,score=0,acc=0,lives=3,startGrace=10;
+var keys={};
+var p={x:0,z:100,y:0,vy:0,r:22,s:245,inv:1.5};
+var oni={x:430,z:380,r:28,s:105,aggro:260};
+var stars=[];
+var blocks=[
+ {x:-320,z:220,w:240,d:210,h:150,c:"#e56d58"},
+ {x:330,z:130,w:260,d:220,h:180,c:"#5fa7a7"},
+ {x:-100,z:-320,w:320,d:190,h:130,c:"#927fc0"},
+ {x:470,z:-350,w:210,d:230,h:160,c:"#f0a25e"}
+];
+
+function makeStars(){
+ stars=[];
+ for(var i=0;i<10;i++)stars.push({x:-650+Math.random()*1300,z:-650+Math.random()*1300,on:true});
+}
+makeStars();
+
+function hitRect(e,b){
+ return e.x+e.r>b.x-b.w/2&&e.x-e.r<b.x+b.w/2&&e.z+e.r>b.z-b.d/2&&e.z-e.r<b.z+b.d/2;
+}
+function blocked(e){
+ for(var i=0;i<blocks.length;i++)if(hitRect(e,blocks[i]))return true;
+ return false;
+}
+function move(e,dx,dz){
+ e.x+=dx;if(blocked(e))e.x-=dx;
+ e.z+=dz;if(blocked(e))e.z-=dz;
+ e.x=Math.max(-740,Math.min(740,e.x));e.z=Math.max(-740,Math.min(740,e.z));
+}
+function dist(a,b){return Math.hypot(a.x-b.x,a.z-b.z)}
+
+var cam={x:0,z:-190,h:300};
+function project(x,y,z){
+ var dx=x-cam.x,dz=z-cam.z;
+ var depth=dz+500;
+ var sc=600/Math.max(80,depth);
+ return {x:innerWidth/2+dx*sc,y:innerHeight*.62-(y-cam.h)*sc,s:sc,depth:depth};
+}
+function poly(a,fill){
+ ctx.beginPath();ctx.moveTo(a[0].x,a[0].y);
+ for(var i=1;i<a.length;i++)ctx.lineTo(a[i].x,a[i].y);
+ ctx.closePath();ctx.fillStyle=fill;ctx.fill();ctx.strokeStyle="#0002";ctx.stroke();
+}
+function box3d(b){
+ var x1=b.x-b.w/2,x2=b.x+b.w/2,z1=b.z-b.d/2,z2=b.z+b.d/2;
+ var a=project(x1,0,z1),bb=project(x2,0,z1),cc=project(x2,0,z2),dd=project(x1,0,z2);
+ var A=project(x1,b.h,z1),B=project(x2,b.h,z1),C=project(x2,b.h,z2),D=project(x1,b.h,z2);
+ if(cc.depth<40)return;
+ poly([A,B,C,D],b.c);
+ poly([bb,cc,C,B],"rgba(0,0,0,.14)");
+ poly([a,dd,D,A],"rgba(0,0,0,.22)");
+}
+function avatar(e,color,emoji,label){
+ var q=project(e.x,e.y,e.z);if(q.depth<60)return;
+ var s=Math.max(.38,q.s);
+ ctx.fillStyle="#244b79";ctx.fillRect(q.x-18*s,q.y-50*s,13*s,30*s);ctx.fillRect(q.x+5*s,q.y-50*s,13*s,30*s);
+ ctx.fillStyle=color;ctx.fillRect(q.x-24*s,q.y-92*s,48*s,45*s);
+ ctx.fillRect(q.x-35*s,q.y-88*s,11*s,38*s);ctx.fillRect(q.x+24*s,q.y-88*s,11*s,38*s);
+ ctx.fillStyle="#ffd6ad";ctx.fillRect(q.x-18*s,q.y-122*s,36*s,31*s);
+ ctx.font=(20*s)+"px sans-serif";ctx.textAlign="center";ctx.fillText(emoji,q.x,q.y-100*s);
+ ctx.font="bold "+(12*s)+"px sans-serif";ctx.fillStyle="white";ctx.strokeStyle="#000";ctx.lineWidth=3;ctx.strokeText(label,q.x,q.y-132*s);ctx.fillText(label,q.x,q.y-132*s);
+}
+function drawStar(st){
+ var q=project(st.x,20,st.z);if(q.depth<60)return;
+ ctx.font=(28*Math.max(.4,q.s))+"px sans-serif";ctx.textAlign="center";ctx.fillText("⭐",q.x,q.y);
+}
+
+function draw(){
+ var g=ctx.createLinearGradient(0,0,0,innerHeight);
+ g.addColorStop(0,"#7fcaff");g.addColorStop(.58,"#d2f0ff");g.addColorStop(.581,"#8bd47c");g.addColorStop(1,"#68b95f");
+ ctx.fillStyle=g;ctx.fillRect(0,0,innerWidth,innerHeight);
+
+ cam.x+=(p.x-cam.x)*.08;cam.z+=(p.z-210-cam.z)*.08;
+
+ ctx.strokeStyle="#ffffff30";
+ for(var k=-700;k<=700;k+=100){
+   var a=project(k,0,-700),b=project(k,0,700);
+   ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();
+   var c1=project(-700,0,k),d1=project(700,0,k);
+   ctx.beginPath();ctx.moveTo(c1.x,c1.y);ctx.lineTo(d1.x,d1.y);ctx.stroke();
+ }
+ var things=[];
+ blocks.forEach(function(b){things.push({d:project(b.x,0,b.z).depth,f:function(){box3d(b)}})});
+ stars.forEach(function(s){if(s.on)things.push({d:project(s.x,0,s.z).depth,f:function(){drawStar(s)}})});
+ things.push({d:project(p.x,0,p.z).depth,f:function(){avatar(p,"#49a8ff","🙂","YOU")}});
+ things.push({d:project(oni.x,0,oni.z).depth,f:function(){avatar(oni,"#ff5365","👹","ONI")}});
+ things.sort(function(a,b){return b.d-a.d});
+ things.forEach(function(t){t.f()});
+ requestAnimationFrame(draw);
+}
+requestAnimationFrame(draw);
+
+function update(dt){
+ if(!running)return;
+ acc+=dt;if(acc>=1){acc-=1;time--;if(startGrace>0)startGrace--;document.getElementById("time").textContent=time;if(time<=0){finish(true);return}}
+ if(p.inv>0)p.inv-=dt;
+
+ var f=0,r=0;
+ if(keys["w"]||keys["ArrowUp"])f++;
+ if(keys["s"]||keys["ArrowDown"])f--;
+ if(keys["a"]||keys["ArrowLeft"])r--;
+ if(keys["d"]||keys["ArrowRight"])r++;
+ f+=-joyY;r+=joyX;
+ if(f||r){
+   var L=Math.hypot(f,r)||1;f/=L;r/=L;
+   move(p,r*p.s*dt,f*p.s*dt);
+ }
+ p.vy-=900*dt;p.y+=p.vy*dt;if(p.y<0){p.y=0;p.vy=0}
+
+ var dx=p.x-oni.x,dz=p.z-oni.z,L2=Math.hypot(dx,dz)||1;
+ if(startGrace<=0 && L2<=oni.aggro){ move(oni,dx/L2*oni.s*dt,dz/L2*oni.s*dt); }
+
+ for(var i=0;i<stars.length;i++){
+   var s=stars[i];
+   if(s.on&&Math.hypot(p.x-s.x,p.z-s.z)<50){s.on=false;score+=100;document.getElementById("score").textContent=score}
+ }
+ if(p.inv<=0&&dist(p,oni)<46){
+   lives--;
+   document.getElementById("lives").textContent=lives;
+   if(lives<=0){finish(false)}
+   else{
+      p.inv=4;
+      p.x=0;p.z=100;p.y=0;p.vy=0;
+      oni.x=430;oni.z=380;
+   }
+ }
+}
+function loop(t){
+ var dt=Math.min(.033,(t-last)/1000||0);last=t;update(dt);requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+function startGame(){
+ document.getElementById("startscreen").style.display="none";
+ document.getElementById("joy").style.display="block";
+ document.getElementById("jump").style.display="block";
+ time=300;score=0;acc=0;lives=3;startGrace=10;
+ document.getElementById("time").textContent="300";
+ document.getElementById("score").textContent="0";
+ document.getElementById("lives").textContent="3";
+ p.x=0;p.z=100;p.y=0;p.vy=0;p.inv=2;
+ oni.x=430;oni.z=380;makeStars();running=true;
+}
+var play=document.getElementById("play");
+play.addEventListener("click",startGame,false);
+play.addEventListener("touchend",function(e){e.preventDefault();startGame()},false);
+
+function finish(win){
+ running=false;
+ var screen=document.getElementById("startscreen"),box=screen.querySelector(".box");
+ screen.style.display="flex";
+ document.getElementById("joy").style.display="none";
+ document.getElementById("jump").style.display="none";
+ box.innerHTML="<h1>"+(win?"🏆 クリア！":"👹 つかまった！")+"</h1><p>スコア <strong>"+score+"点</strong></p><button id='again' type='button' style='border:0;border-radius:18px;background:#62c8ff;padding:16px 32px;font-size:22px;font-weight:900'>もう一回</button>";
+ document.getElementById("again").onclick=function(){location.reload()};
+}
+
+addEventListener("keydown",function(e){keys[e.key]=true;if(e.code==="Space"){e.preventDefault();jump()}});
+addEventListener("keyup",function(e){keys[e.key]=false});
+function jump(){if(running&&p.y===0)p.vy=420}
+document.getElementById("jump").addEventListener("click",jump);
+document.getElementById("jump").addEventListener("touchend",function(e){e.preventDefault();jump()});
+
+var joy=document.getElementById("joy"),stick=document.getElementById("stick"),joyX=0,joyY=0;
+function setJoy(x,y){
+ var rr=joy.getBoundingClientRect(),cx=rr.left+rr.width/2,cy=rr.top+rr.height/2;
+ var dx=x-cx,dy=y-cy,l=Math.hypot(dx,dy),m=38;
+ if(l>m){dx=dx/l*m;dy=dy/l*m}
+ joyX=dx/m;joyY=dy/m;stick.style.transform="translate("+dx+"px,"+dy+"px)";
+}
+joy.addEventListener("touchstart",function(e){e.preventDefault();var t=e.touches[0];setJoy(t.clientX,t.clientY)},{passive:false});
+joy.addEventListener("touchmove",function(e){e.preventDefault();var t=e.touches[0];setJoy(t.clientX,t.clientY)},{passive:false});
+joy.addEventListener("touchend",function(e){e.preventDefault();joyX=joyY=0;stick.style.transform="translate(0,0)"},{passive:false});
+joy.addEventListener("pointerdown",function(e){joy.setPointerCapture(e.pointerId);setJoy(e.clientX,e.clientY)});
+joy.addEventListener("pointermove",function(e){if(e.buttons)setJoy(e.clientX,e.clientY)});
+joy.addEventListener("pointerup",function(){joyX=joyY=0;stick.style.transform="translate(0,0)"});
+})();
+</script>
+</body>
+</html>
