@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>音楽おにごっこ</title>
+<title>音楽おにごっこ・かんたん音ゲー版</title>
 <style>
 html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#8fd8ff;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;touch-action:none}
 canvas{position:fixed;inset:0;width:100%;height:100%;touch-action:none}
@@ -88,10 +88,10 @@ canvas{position:fixed;inset:0;width:100%;height:100%;touch-action:none}
 <div id="rhythm">
  <div class="card">
    <h2>🎵 音ゲータイム！</h2>
-   <div id="rhythmInfo">10秒間、黄色い丸が真ん中に来たらTAP！</div>
-   <div id="beatLane"><div id="target"></div></div>
+   <div id="rhythmInfo">10秒間、ボタンが光ったらTAP！</div>
+   <div id="beatLane" style="display:flex;align-items:center;justify-content:center;"><div id="easyBeat" style="width:96px;height:96px;border-radius:50%;background:#4b5563;box-shadow:0 0 0 transparent;transition:.12s;"></div></div>
    <button id="tap">TAP！</button>
-   <div class="small">成功を続けるとアイテムGET！　失敗してもすぐやり直せます。</div>
+   <div class="small">光っている間に押せば成功！ 5回成功するとアイテムGET！</div>
  </div>
 </div>
 
@@ -105,7 +105,7 @@ const FOV=Math.PI/2.7;
 let running=false,last=0,elapsed=0,life=3,musicScore=0,inv=0;
 let selectedChar='pink',selectedMap='city',oniCount=1;
 let currentItem=null,itemUntil=0,barrier=false;
-let rhythmOpen=false,rhythmStart=0,rhythmHits=0,noteX=0,noteDir=1;
+let rhythmOpen=false,rhythmStart=0,rhythmHits=0,beatOn=false,nextBeat=0,beatOffAt=0;
 
 const player={x:0,z:43,y:1.7,vy:0,yaw:Math.PI,eye:1.7};
 const keys={},joy={x:0,y:0};
@@ -237,30 +237,90 @@ function updateRadar(){
 
 function openRhythm(){
  if(rhythmOpen)return;
- rhythmOpen=true;rhythmStart=performance.now();rhythmHits=0;noteX=0;noteDir=1;
+ rhythmOpen=true;
+ rhythmStart=performance.now();
+ rhythmHits=0;
+ beatOn=false;
+ nextBeat=performance.now()+500;
+ beatOffAt=0;
  document.getElementById('rhythm').style.display='flex';
+ document.getElementById('rhythmInfo').textContent='ボタンが光ったらTAP！';
+ const beat=document.getElementById('easyBeat');
+ beat.style.background='#4b5563';
+ beat.style.boxShadow='0 0 0 transparent';
 }
-function closeRhythm(){rhythmOpen=false;document.getElementById('rhythm').style.display='none';document.querySelectorAll('.note').forEach(n=>n.remove())}
+function closeRhythm(){
+ rhythmOpen=false;
+ document.getElementById('rhythm').style.display='none';
+}
 function rhythmTick(){
  if(!rhythmOpen)return;
- const lane=document.getElementById('beatLane');
- let n=lane.querySelector('.note');
- if(!n){n=document.createElement('div');n.className='note';lane.appendChild(n)}
- noteX+=noteDir*1.7;if(noteX>92){noteX=92;noteDir=-1}else if(noteX<0){noteX=0;noteDir=1}
- n.style.left=noteX+'%';
- const sec=(performance.now()-rhythmStart)/1000;
- document.getElementById('rhythmInfo').textContent=`あと ${Math.max(0,Math.ceil(10-sec))}秒　成功 ${rhythmHits}回`;
- if(sec>=10){
-   if(rhythmHits>=5){giveItem();musicScore+=100;document.getElementById('musicScore').textContent=musicScore;sfx(980,.18);flash('🎁 アイテムGET！')}
-   else{flash('もう一回！');}
-   closeRhythm();return;
+
+ const now=performance.now();
+ const sec=(now-rhythmStart)/1000;
+ const beat=document.getElementById('easyBeat');
+
+ // 1秒ごとに約0.7秒間光るので、かなり押しやすい
+ if(!beatOn && now>=nextBeat){
+   beatOn=true;
+   beatOffAt=now+700;
+   beat.style.background='#ffd84d';
+   beat.style.boxShadow='0 0 32px #ffd84d';
+   sfx(520,.08,'sine',.10);
  }
+ if(beatOn && now>=beatOffAt){
+   beatOn=false;
+   beat.style.background='#4b5563';
+   beat.style.boxShadow='0 0 0 transparent';
+   nextBeat=now+350;
+ }
+
+ document.getElementById('rhythmInfo').textContent=
+   `あと ${Math.max(0,Math.ceil(10-sec))}秒　成功 ${rhythmHits}/5`;
+
+ // 5回成功したら10秒待たずにクリア
+ if(rhythmHits>=5){
+   giveItem();
+   musicScore+=100;
+   document.getElementById('musicScore').textContent=musicScore;
+   sfx(980,.18);
+   flash('🎁 アイテムGET！');
+   closeRhythm();
+   return;
+ }
+
+ // 10秒終了時、3回以上でもおまけクリアにして子ども向けにやさしく
+ if(sec>=10){
+   if(rhythmHits>=3){
+     giveItem();
+     musicScore+=100;
+     document.getElementById('musicScore').textContent=musicScore;
+     sfx(980,.18);
+     flash('🎁 アイテムGET！');
+   }else{
+     flash('もう一回！');
+   }
+   closeRhythm();
+   return;
+ }
+
  requestAnimationFrame(rhythmTick);
 }
 document.getElementById('tap').onclick=()=>{
- const good=Math.abs(noteX-50)<13;
- if(good){rhythmHits++;sfx(800,.08);flash('GOOD!')}
- else{sfx(180,.08,'square',.12);flash('MISS')}
+ if(!rhythmOpen)return;
+ if(beatOn){
+   rhythmHits++;
+   beatOn=false;
+   const beat=document.getElementById('easyBeat');
+   beat.style.background='#63e6be';
+   beat.style.boxShadow='0 0 28px #63e6be';
+   sfx(820,.08);
+   flash('GOOD!');
+   nextBeat=performance.now()+300;
+ }else{
+   // 失敗しても減点なし
+   sfx(220,.06,'square',.06);
+ }
 };
 
 function giveItem(){
