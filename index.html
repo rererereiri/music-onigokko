@@ -50,7 +50,7 @@ canvas{position:fixed;inset:0;width:100%;height:100%;touch-action:none}
 <div id="radar">👹 鬼は10秒後にスタート！</div>
 <div id="cross">＋</div>
 <div id="msg"></div>
-<div id="hint">右側スワイプ：見る<br>🎵台に近づく：音ゲー</div>
+<div id="hint">右側スワイプ：見る<br>🎵マーク6m以内：音ゲー</div>
 
 <div id="joy"><div id="stick"></div></div>
 <button id="jump">JUMP</button>
@@ -59,7 +59,7 @@ canvas{position:fixed;inset:0;width:100%;height:100%;touch-action:none}
 <div id="setup" class="overlay">
  <div class="card">
   <h1>🎮 音楽おにごっこ</h1>
-  <div class="small">鬼から逃げながら、マップ内の 🎵 音ゲースポットを探そう。<br>10秒間成功するとランダムアイテムがもらえる！</div>
+  <div class="small">鬼から逃げながら、マップ内の 🎵 音ゲースポットを探そう。<br>最初の音ゲースポットはスタート地点のすぐ近く！<br>6m以内に入ると自動で音ゲーが始まります。</div>
 
   <h3>キャラクター</h3>
   <div class="row" id="chars">
@@ -115,7 +115,7 @@ let blocks=[], stations=[], onis=[];
 function buildWorld(){
  blocks=[];
  stations=[
-   {x:0,z:15},{x:-28,z:10},{x:28,z:-20},{x:0,z:-35}
+   {x:0,z:36},{x:0,z:15},{x:-28,z:10},{x:28,z:-20},{x:0,z:-35}
  ];
  if(selectedMap==='city'){
   blocks=[
@@ -196,10 +196,24 @@ function drawBox(b){
  poly([p.A,p.B,p.C,p.D],b.c);poly([p.b,p.c,p.C,p.B],'rgba(0,0,0,.15)');poly([p.a,p.d,p.D,p.A],'rgba(0,0,0,.24)');
 }
 function drawStation(s){
- const p=project(s.x,1.2,s.z);if(!p)return;
- const z=Math.max(.45,p.s);
- ctx.save();ctx.textAlign='center';ctx.shadowColor='#6cf';ctx.shadowBlur=20;ctx.font=`${Math.max(28,34*z)}px sans-serif`;ctx.fillText('🎵',p.x,p.y);ctx.restore();
- ctx.fillStyle='#fff';ctx.font=`bold ${Math.max(11,13*z)}px sans-serif`;ctx.textAlign='center';ctx.fillText('音ゲー',p.x,p.y+22*z);
+ const p=project(s.x,1.4,s.z);if(!p)return;
+ const z=Math.max(.55,p.s);
+ const dist=Math.hypot(player.x-s.x,player.z-s.z);
+ ctx.save();
+ ctx.textAlign='center';
+ ctx.shadowColor='#00e5ff';
+ ctx.shadowBlur=28;
+ ctx.font=`${Math.max(40,48*z)}px sans-serif`;
+ ctx.fillText('🎵',p.x,p.y);
+ ctx.restore();
+
+ ctx.fillStyle='#fff';
+ ctx.strokeStyle='#000';
+ ctx.lineWidth=4;
+ ctx.font=`bold ${Math.max(14,16*z)}px sans-serif`;
+ ctx.textAlign='center';
+ ctx.strokeText(`音ゲー ${Math.round(dist)}m`,p.x,p.y+30*z);
+ ctx.fillText(`音ゲー ${Math.round(dist)}m`,p.x,p.y+30*z);
 }
 function drawOni(o){
  const p=project(o.x,1.5,o.z);if(!p)return;const s=Math.max(.4,p.s);
@@ -390,7 +404,7 @@ function loop(t){
   }
 
   for(const s of stations){
-    if(Math.hypot(player.x-s.x,player.z-s.z)<3.2){openRhythm();requestAnimationFrame(rhythmTick);break}
+    if(Math.hypot(player.x-s.x,player.z-s.z)<6){openRhythm();requestAnimationFrame(rhythmTick);break}
   }
  }
 
